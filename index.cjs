@@ -8,14 +8,13 @@ const cloudscraper = require('cloudscraper')
 async function login(page, url, auth, buttonSelector){
     let res;
     let html = await cloudscraper.get(url, (error, response, body) => {
+        if(error) throw 'error get'
         fs.writeFile('bodyCloudScraper.html', body)
         res = response.request
     })
-    if(html.search('app-root') !== -1){
-        console.log('error');
+    if(html.search('app-root') === -1){
         await fs.writeFile('resultCloudScraper.html', html)
-        await new Promise((resolve) => setTimeout(() => resolve(), 60000))
-        login(page, url, auth, buttonSelector)
+        throw 'error e'
     }
     const headers = {...res.headers}
     delete headers['Host']
@@ -122,7 +121,7 @@ async function run () {
     })
     const page = await browser.newPage()
 
-    login(page, 'https://app.stormgain.com/#modal_login', [
+    try{login(page, 'https://app.stormgain.com/#modal_login', [
         {
             selector: '#email', value: 'asfasad@asda.com'
         },
@@ -161,7 +160,11 @@ async function run () {
     await fs.unlink('./diff.png')
     await fs.unlink('./puzzle.png')
 
-    await browser.close()
+    await browser.close()}
+    catch(error){
+        setTimeout(run, 60000)
+        console.log(error);
+    }
 }
 
 run()
