@@ -6,11 +6,21 @@ const { cv } = require('opencv-wasm')
 const cloudscraper = require('cloudscraper')
 
 async function login(page, url, auth, buttonSelector){
-    const res = cloudscraper.get(url)
+    let res;
+    let html = await cloudscraper.get(url, (error, response, body) => {
+        fs.writeFile('bodyCloudScraper.html', body)
+        res = response.request
+    })
+    if(html.search('app-root') !== -1){
+        console.log('error');
+        await fs.writeFile('resultCloudScraper.html', html)
+        await new Promise((resolve) => setTimeout(() => resolve(), 60000))
+        login(page, url, auth, buttonSelector)
+    }
     const headers = {...res.headers}
     delete headers['Host']
     page.setExtraHTTPHeaders(headers)
-    if(res.hasHeader('setCookie')){
+    if(res.hasHeader('set-cookie') || res.hasHeader('SetCookie')){
         console.log('Has cookie');
         const cookies = res.headers.cookie.split('; ').map(cookie => {
             const [name, value] = cookie.split('=');
@@ -32,13 +42,6 @@ async function login(page, url, auth, buttonSelector){
 }
 
 async function passCaptcha(page, selectorImg, selectorButton){
-    await page.waitForSelector('.tab-item.tab-item-1')
-    await page.click('.tab-item.tab-item-1')
-
-    await page.waitForSelector('[aria-label="Click to verify"]')
-    await new Promise((response) => setTimeout(() => response(), 1000))
-
-    await page.click('[aria-label="Click to verify"]')
     await page.waitForSelector(selectorImg, { visible: true })
     await new Promise((response) => setTimeout(() => response(), 1000))
     let images = await page.$$eval(selectorImg, canvases => {
@@ -115,40 +118,43 @@ async function passCaptcha(page, selectorImg, selectorButton){
 
 async function run () {
     const browser = await puppeteer.launch({
-        headless: false,
-        defaultViewport: {width: 1080, height: 1024}
+        args: ['--disable-extensions']
     })
     const page = await browser.newPage()
 
-    // login(page, 'app.stormgain.com/#modal_login', [
-    //     {
-    //         selector: '#email', value: 'asfasad@asda.com'
-    //     },
-    //     {
-    //         selector: '#password', value: 'saasdasasd'
-    //     }
-    // ], '.controls input')
+    login(page, 'https://app.stormgain.com/#modal_login', [
+        {
+            selector: '#email', value: 'asfasad@asda.com'
+        },
+        {
+            selector: '#password', value: 'saasdasasd'
+        }
+    ], '.controls input')
 
-    const res = cloudscraper.get('https://www.geetest.com/en/demo')
-    const headers = {...res.headers}
-    delete headers['Host']
-    page.setExtraHTTPHeaders(headers)
-    if(res.hasHeader('setCookie')){
-        console.log('Has cookie');
-        const cookies = res.headers.cookie.split('; ').map(cookie => {
-            const [name, value] = cookie.split('=');
-            return { name, value };
-        });
-        await page.setCookie(...cookies);
-    }
+    // const res = cloudscraper.get('https://www.geetest.com/en/demo')
+    // const headers = {...res.headers}
+    // delete headers['Host']
+    // page.setExtraHTTPHeaders(headers)
+    // if(res.hasHeader('setCookie')){
+    //     console.log('Has cookie');
+    //     const cookies = res.headers.cookie.split('; ').map(cookie => {
+    //         const [name, value] = cookie.split('=');
+    //         return { name, value };
+    //     });
+    //     await page.setCookie(...cookies);
+    // }
 
-    await page.goto('https://www.geetest.com/en/demo', { waitUntil: 'networkidle2' })
+    // await page.goto('https://www.geetest.com/en/demo', { waitUntil: 'networkidle2' })
+    let index = 0
+    page.on('load', async () => {
+            const content = await page.content();
+            await fs.writeFile(`${index}.html`, JSON.stringify(content));
+            index++;
+      });
 
     await new Promise((response) => setTimeout(() => response(), 1000))
 
     await passCaptcha(page, '.geetest_canvas_img canvas', '.geetest_slider_button')
-
-    // success!
 
     await fs.unlink('./original.png')
     await fs.unlink('./captcha.png')
